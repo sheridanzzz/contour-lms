@@ -52,3 +52,7 @@ PLAN.md
 # editors
 .idea/
 .vscode/
+
+# written by next dev for AI coding agents, not part of the app
+AGENTS.md
+CLAUDE.md
