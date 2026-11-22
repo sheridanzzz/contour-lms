@@ -1,10 +1,9 @@
-import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { BookConsultationDialog } from "@/components/consultations/book-consultation-dialog";
 import { ConsultationList } from "@/components/consultations/consultation-list";
-import { TableSkeleton } from "@/components/consultations/consultations-table";
-import { getCurrentUser } from "@/lib/auth";
+import { TableSkeleton } from "@/components/consultations/table-skeleton";
 
+// Static shell renders instantly; the student's data streams in behind the skeleton.
 export default function DashboardPage({ searchParams }: PageProps<"/dashboard">) {
   return (
     <div className="flex flex-col gap-6">
@@ -18,16 +17,8 @@ export default function DashboardPage({ searchParams }: PageProps<"/dashboard">)
         <BookConsultationDialog />
       </div>
       <Suspense fallback={<TableSkeleton />}>
-        <StudentConsultations searchParams={searchParams} />
+        <ConsultationList searchParams={searchParams} mode="student" />
       </Suspense>
     </div>
   );
-}
-
-async function StudentConsultations({ searchParams }: Pick<PageProps<"/dashboard">, "searchParams">) {
-  const user = await getCurrentUser();
-  if (!user) redirect("/auth/login");
-  // Admins oversee and don't book: their home is the admin view.
-  if (user.isAdmin) redirect("/admin");
-  return <ConsultationList user={user} searchParams={await searchParams} mode="student" />;
 }

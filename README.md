@@ -34,10 +34,13 @@ npm run dev                      # http://localhost:3000
 
 New sign-ups are always students. Email confirmation is off locally (Supabase default), so sign-up logs you straight in. Auth emails, if enabled, appear in Mailpit at http://127.0.0.1:55324.
 
-To make another user an admin:
+To make another user an admin (Supabase Studio at http://127.0.0.1:55323, SQL editor):
 ```sql
-update public.profiles set role = 'admin' where id = '<auth user id>';
+update public.profiles set role = 'admin'
+where id = (select id from auth.users where email = 'someone@example.com');
 ```
+
+Passwords: at least 8 characters with upper and lower case letters and a number (`supabase/config.toml`), hashed by Supabase Auth. Changing a password requires a recent login (`secure_password_change`).
 
 ### Scripts
 | Script | What it does |
@@ -158,9 +161,32 @@ All of the above is proven by `supabase/tests/database/security.test.sql` (26 pg
 | Pinned versions (`next@16.4.6`, Supabase libs) | The template uses `latest`, which could silently move past the required Next.js version. |
 
 ### Conventions
-- DB: `snake_case`. API and UI: `camelCase`, mapped in one place (`toConsultation`).
+- **Naming:** DB is `snake_case`; API and UI are `camelCase`, mapped in one place (`toConsultation` in the service).
+- **One component per file.** Shared helpers that are not components (status labels, list URLs) live in `lib/consultations/`.
+- **Types:** shared contract types live in `types` files: `lib/consultations/types.ts` (domain, derived from the DB and zod schemas) and `lib/api-types.ts` (the HTTP error contract used by server and client). Types private to one module (`Guard`, `Result`, `CurrentUser`) stay in that module. Component props are typed inline next to the component.
+- **Error handling at boundaries, one pattern per layer:**
+  - Service and browser client both return `{ data, error }` instead of throwing.
+  - API routes map errors in `lib/api.ts` (`validationError`, `dbError`), and every handler is wrapped in `withErrorHandling`, so even an unexpected failure (Supabase down, a bug) is logged and answered as JSON in the shared shape, never as Next's HTML 500.
+  - `getCurrentUser` tells "not signed in" (401) apart from "Auth unreachable" (500).
+  - Pages handle a failed read where the data is loaded (`ConsultationList` shows an inline message); `error.tsx` only catches the truly unexpected.
+- **Styling:** Tailwind with the shadcn theme tokens (`text-destructive`, `bg-secondary`, ...); no hardcoded colours; Tailwind's rem-based scale for sizes.
 - Server-only modules import `server-only` so they cannot leak into client bundles.
 - Status and role values come from the generated DB enums, never hand-written string lists.
+
+### Engineering principles
+How the usual principles show up here, and where I deliberately stopped.
+
+| Principle | Where it shows |
+|---|---|
+| **Single responsibility / separation of concerns** | Route handlers only do HTTP (guard, parse, call, map). `service.ts` only does data access and DB-to-API mapping. Components render; `use-update-consultation` owns the PATCH + toast + refresh flow. The database owns authorization and integrity. |
+| **Encapsulation** | `toConsultation` is private to the service, so `snake_case` never leaks past it. `readJson` is private to `lib/api.ts`. Each layer exposes a small surface: `listConsultations` / `createConsultation` / `updateConsultation`, `callApi`, `requireStudent` / `requireAdmin` / `requirePageRole`. |
+| **Dependency injection** | Service functions take the Supabase client as a parameter instead of creating one, so the caller decides which identity runs the query (always the signed-in user) and tests pass a fake (`service.test.ts`, no database). |
+| **Interfaces / contracts** | Typed contracts at every boundary: `Consultation`, `Paginated<T>`, inputs inferred from zod (`types.ts`); `ApiErrorBody`, `FieldErrors` (`api-types.ts`); `Result<T>` and `ApiResult<T>` for `{ data, error }`; DB types generated from the schema. |
+| **DRY / reuse** | One zod schema per payload for form and API; `consultationLimits` for field and paging limits; status rules in `rules.ts` (UI) and the trigger (DB); `parse` / `parseBody` / `parseQuery` for every handler; `listHref`, `statusLabel`, date formatters and slot helpers in `lib/consultations/`; `ListLink`, `FormField`, `StatusBadge` reused across views. |
+| **Fail fast, validate at the edge** | zod at the API boundary (strict objects reject unknown keys), constraints and a trigger in the database. |
+| **Least privilege / defense in depth** | Column grants, RLS, no service role key, API role guards, UI only hides. Each layer would stop the attack on its own. |
+| **Open for extension** | Statuses come from a DB enum feeding zod, types and labels; adding one is a migration plus a label. Roles live in a table and one function, so permissions can grow without touching callers. |
+| **KISS / YAGNI (deliberate)** | No repository classes or interfaces with a single implementation: plain functions with an injected client are easier to test and read. No state library: the URL holds list state and the server renders it. |
 
 ---
 
@@ -170,7 +196,7 @@ All of the above is proven by `supabase/tests/database/security.test.sql` (26 pg
 |---|---|---|
 | Database (pgTAP) | `npm run test:db` | RLS enabled; anon has no access; students see only their own rows and profile; cannot change roles, set owner/status on insert, delete, or touch others' rows; future-only bookings; blank fields rejected; every status transition; admin reads all but cannot write |
 | API integration (Vitest) | `npm run test:api` | 38 tests over real HTTP with real sessions: 401 on every route; booking (201, field errors, past/blank/long/non-ISO, client-set owner or status, bad JSON); own-rows-only listing, envelope, filters, page past the end, bad query params; complete/reopen/reschedule/cancel, every 409 transition, bad bodies, malformed id, 404 for other students and unknown ids; admin 403 on student routes and student 403 on the admin route; admin sees every student, filter + pagination |
-| Unit (Vitest) | `npm test` | Booking/update/list schemas (future dates, lengths, strict keys, one-change rule, page size cap); time slot helpers |
+| Unit (Vitest) | `npm test` | 32 tests: schemas (future dates, lengths, strict keys, one-change rule, page size cap, one message per bad date); status rules matrix (same as the DB); time slot helpers; service with a fake injected client (filters, paging, camelCase mapping, page-past-the-end fallback, only booking fields sent, owner-scoped update); API boundary (`withErrorHandling`, `dbError`, field errors); browser client (`callApi` success, API error, non-JSON reply, network failure) |
 | Manual | browser | Signed-out redirects; wrong password; sign-up (mismatch, short password, success as Student); booking validation (blank, whitespace, no date); picker (past days and slots hidden, local time sent as UTC); complete/incomplete persists; reschedule pre-fills and re-sorts; cancel confirm and "Keep it"; status filters and bad query params; page past the end; stale row changed elsewhere (409 toast, list refreshes); student 404 on `/admin`; admin list, filter, read-only; logout clears client state; phone width |
 | Security probes | curl + browser | Direct Data API calls with student/admin/no token; cross-site POST and PATCH from another origin (blocked: `SameSite=Lax` cookie, CORS preflight); HTML/script in names and reason renders as text; no secret or service role key in the client bundle; `npm audit` clean |
 
@@ -198,12 +224,21 @@ app/
   api/consultations/[id]/route.ts    PATCH
   api/admin/consultations/route.ts   GET (admin)
   auth/*                        template auth pages
-components/consultations/       table, dialogs, actions, list
+components/
+  consultations/                one component per file: list, table, status badge/filter,
+                                pagination, booking/reschedule/cancel dialogs, complete toggle,
+                                date-time picker, form field, skeleton
+  user-nav.tsx, role-redirect.tsx, logout-button.tsx, auth forms (template)
 lib/
-  api.ts                        auth guards, error shape, DB error mapping
-  auth.ts                       getCurrentUser (claims + is_admin)
-  consultations/schema.ts       zod schemas + API types
-  consultations/service.ts      all consultation queries
+  api.ts                        API boundary: guards, withErrorHandling, error mapping
+  api-types.ts                  HTTP error contract shared by server and client
+  auth.ts                       getCurrentUser (claims + is_admin), requirePageRole
+  consultations/schema.ts       zod request schemas
+  consultations/types.ts        shared domain types
+  consultations/service.ts      all consultation queries (server)
+  consultations/api-client.ts   browser boundary for /api calls
+  consultations/rules.ts        UI mirror of the DB status rules
+  consultations/datetime.ts, status.ts, list-url.ts   small shared helpers (slots, formatting, labels, URLs)
   supabase/                     clients, proxy session refresh, generated types
 supabase/
   migrations/                   schema, RLS, privileges, trigger

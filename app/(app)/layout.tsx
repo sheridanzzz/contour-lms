@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { LogoutButton } from "@/components/logout-button";
-import { Badge } from "@/components/ui/badge";
-import { getCurrentUser } from "@/lib/auth";
+import { UserNav } from "@/components/user-nav";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -19,29 +17,5 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </header>
       <main className="mx-auto w-full max-w-5xl flex-1 p-5">{children}</main>
     </div>
-  );
-}
-
-async function UserNav() {
-  const user = await getCurrentUser();
-  if (!user) return null;
-
-  return (
-    <nav className="flex items-center gap-4 text-sm">
-      {user.isAdmin ? (
-        <Link href="/admin" className="hover:underline">
-          All consultations
-        </Link>
-      ) : (
-        <Link href="/dashboard" className="hover:underline">
-          Dashboard
-        </Link>
-      )}
-      <span className="hidden items-center gap-2 text-muted-foreground sm:flex">
-        {user.email}
-        <Badge variant="outline">{user.isAdmin ? "Admin" : "Student"}</Badge>
-      </span>
-      <LogoutButton />
-    </nav>
   );
 }

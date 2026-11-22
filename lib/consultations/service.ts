@@ -1,22 +1,36 @@
 import "server-only";
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/lib/supabase/database.types";
-import {
-  toConsultation,
-  type Consultation,
-  type ConsultationStatus,
-  type CreateConsultationInput,
-  type ListConsultationsQuery,
-  type Paginated,
-  type UpdateConsultationInput,
-} from "./schema";
+import type { Database, Tables } from "@/lib/supabase/database.types";
+import type {
+  Consultation,
+  ConsultationStatus,
+  CreateConsultationInput,
+  ListConsultationsQuery,
+  Paginated,
+  UpdateConsultationInput,
+} from "./types";
 
 // Data access for consultations. Used by API route handlers (writes) and
 // Server Components (reads). Always called with the user-scoped client, so RLS
-// applies to every query. Returns { data, error } like supabase-js.
+// applies to every query. Returns { data, error } like supabase-js; callers
+// map the error at their boundary (dbError in the API, an inline message in pages).
 
 type Client = SupabaseClient<Database>;
 type Result<T> = { data: T; error: null } | { data: null; error: PostgrestError };
+
+/** DB row (snake_case) -> API shape (camelCase). The only place the two meet. */
+function toConsultation(row: Tables<"consultations">): Consultation {
+  return {
+    id: row.id,
+    firstName: row.first_name,
+    lastName: row.last_name,
+    reason: row.reason,
+    scheduledAt: row.scheduled_at,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
 
 /**
  * studentId set: that student's consultations (dashboard).

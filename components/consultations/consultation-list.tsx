@@ -1,22 +1,25 @@
+import { requirePageRole } from "@/lib/auth";
 import { listConsultationsQuerySchema } from "@/lib/consultations/schema";
 import { listConsultations } from "@/lib/consultations/service";
-import type { CurrentUser } from "@/lib/auth";
-import { ConsultationsTable, Pagination, StatusFilter } from "./consultations-table";
+import { ConsultationsTable } from "./consultations-table";
+import { Pagination } from "./pagination";
+import { StatusFilter } from "./status-filter";
 
 /**
  * Server-rendered, URL-driven list shared by the student dashboard and the admin view.
- * Reads go straight through the service (no extra HTTP hop); writes go through /api.
+ * Checks the role itself, reads straight through the service (no extra HTTP
+ * hop; writes go through /api), and handles a failed read here, at the data
+ * boundary, with an inline message rather than crashing the page.
  */
 export async function ConsultationList({
-  user,
   searchParams,
   mode,
 }: {
-  user: CurrentUser;
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
   mode: "student" | "admin";
 }) {
-  const parsed = listConsultationsQuerySchema.safeParse(searchParams);
+  const user = await requirePageRole(mode);
+  const parsed = listConsultationsQuerySchema.safeParse(await searchParams);
   const query = parsed.success ? parsed.data : listConsultationsQuerySchema.parse({});
   const basePath = mode === "admin" ? "/admin" : "/dashboard";
 
@@ -25,7 +28,14 @@ export async function ConsultationList({
     // Students: filter to their own rows explicitly rather than relying on RLS alone.
     studentId: mode === "student" ? user.userId : undefined,
   });
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("Failed to load consultations", { mode, error });
+    return (
+      <p role="alert" className="rounded-md border border-destructive/50 p-4 text-sm text-destructive">
+        We couldn&apos;t load consultations right now. Please refresh the page to try again.
+      </p>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">

@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { PASSWORD_HINT, PASSWORD_MIN_LENGTH } from "@/lib/password-policy";
 
 export function SignUpForm({
   className,
@@ -86,9 +87,14 @@ export function SignUpForm({
                   id="password"
                   type="password"
                   required
+                  minLength={PASSWORD_MIN_LENGTH}
+                  aria-describedby="password-hint"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
+                <p id="password-hint" className="text-xs text-muted-foreground">
+                  {PASSWORD_HINT}
+                </p>
               </div>
               <div className="grid gap-2">
                 <div className="flex items-center">
@@ -102,7 +108,7 @@ export function SignUpForm({
                   onChange={(e) => setRepeatPassword(e.target.value)}
                 />
               </div>
-              {error && <p className="text-sm text-red-500">{error}</p>}
+              {error && <p className="text-sm text-destructive">{error}</p>}
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? "Creating an account..." : "Sign up"}
               </Button>

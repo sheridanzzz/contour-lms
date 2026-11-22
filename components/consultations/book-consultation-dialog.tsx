@@ -16,12 +16,12 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { ApiError, callApi } from "@/lib/consultations/api-client";
-import { createConsultationSchema } from "@/lib/consultations/schema";
+import type { FieldErrors } from "@/lib/api-types";
+import { callApi } from "@/lib/consultations/api-client";
+import { consultationLimits, createConsultationSchema } from "@/lib/consultations/schema";
+import type { Consultation } from "@/lib/consultations/types";
 import { DateTimePicker } from "./date-time-picker";
 import { errorProps, FormField } from "./form-field";
-
-type FieldErrors = Partial<Record<string, string[]>>;
 
 export function BookConsultationDialog() {
   const router = useRouter();
@@ -41,7 +41,7 @@ export function BookConsultationDialog() {
       scheduledAt: form.get("scheduledAt"),
     });
     if (!parsed.success) {
-      setErrors(z.flattenError(parsed.error).fieldErrors);
+      setErrors(z.flattenError(parsed.error).fieldErrors as FieldErrors);
       setFormError(null);
       return;
     }
@@ -49,18 +49,16 @@ export function BookConsultationDialog() {
     setErrors({});
     setFormError(null);
     setPending(true);
-    try {
-      await callApi("/api/consultations", "POST", parsed.data);
-      toast.success("Consultation booked");
-      setOpen(false);
-      router.refresh();
-    } catch (error) {
-      const apiError = error instanceof ApiError ? error : new ApiError(0, "Something went wrong");
-      setErrors(apiError.fields);
-      setFormError(apiError.message);
-    } finally {
-      setPending(false);
+    const { error } = await callApi<{ data: Consultation }>("/api/consultations", "POST", parsed.data);
+    setPending(false);
+    if (error) {
+      setErrors(error.fields);
+      setFormError(error.message);
+      return;
     }
+    toast.success("Consultation booked");
+    setOpen(false);
+    router.refresh();
   }
 
   function handleOpenChange(next: boolean) {
@@ -84,14 +82,14 @@ export function BookConsultationDialog() {
         <form onSubmit={handleSubmit} noValidate className="grid gap-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <FormField id="firstName" label="First name" error={errors.firstName?.[0]}>
-              <Input id="firstName" name="firstName" autoComplete="given-name" maxLength={100} {...errorProps("firstName", errors.firstName?.[0])} />
+              <Input id="firstName" name="firstName" autoComplete="given-name" maxLength={consultationLimits.name} {...errorProps("firstName", errors.firstName?.[0])} />
             </FormField>
             <FormField id="lastName" label="Last name" error={errors.lastName?.[0]}>
-              <Input id="lastName" name="lastName" autoComplete="family-name" maxLength={100} {...errorProps("lastName", errors.lastName?.[0])} />
+              <Input id="lastName" name="lastName" autoComplete="family-name" maxLength={consultationLimits.name} {...errorProps("lastName", errors.lastName?.[0])} />
             </FormField>
           </div>
           <FormField id="reason" label="Reason for consultation" error={errors.reason?.[0]}>
-            <Textarea id="reason" name="reason" rows={3} maxLength={1000} {...errorProps("reason", errors.reason?.[0])} />
+            <Textarea id="reason" name="reason" rows={3} maxLength={consultationLimits.reason} {...errorProps("reason", errors.reason?.[0])} />
           </FormField>
           <FormField id="scheduledAt" label="Date and time" error={errors.scheduledAt?.[0]}>
             <DateTimePicker id="scheduledAt" name="scheduledAt" error={errors.scheduledAt?.[0]} />

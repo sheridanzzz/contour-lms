@@ -1,6 +1,3 @@
-import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -9,26 +6,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  consultationStatuses,
-  type Consultation,
-  type ConsultationStatus,
-  type Paginated,
-} from "@/lib/consultations/schema";
+import { isCancelled } from "@/lib/consultations/rules";
+import type { Consultation } from "@/lib/consultations/types";
 import { cn } from "@/lib/utils";
-import { CompleteToggle, ConsultationActions } from "./consultation-actions";
+import { CompleteToggle } from "./complete-toggle";
+import { ConsultationActions } from "./consultation-actions";
 import { LocalDateTime } from "./local-date-time";
-
-const statusLabel: Record<ConsultationStatus, string> = {
-  booked: "Booked",
-  completed: "Completed",
-  cancelled: "Cancelled",
-};
-const statusVariant: Record<ConsultationStatus, "default" | "secondary" | "outline"> = {
-  booked: "default",
-  completed: "secondary",
-  cancelled: "outline",
-};
+import { StatusBadge } from "./status-badge";
 
 /** One table for both views: "student" adds the complete toggle and actions, "admin" is read-only. */
 export function ConsultationsTable({
@@ -63,7 +47,7 @@ export function ConsultationsTable({
       </TableHeader>
       <TableBody>
         {consultations.map((c) => (
-          <TableRow key={c.id} className={cn(c.status === "cancelled" && "text-muted-foreground")}>
+          <TableRow key={c.id} className={cn(isCancelled(c.status) && "text-muted-foreground")}>
             {mode === "student" && (
               <TableCell>
                 <CompleteToggle consultation={c} />
@@ -79,7 +63,7 @@ export function ConsultationsTable({
               <LocalDateTime iso={c.scheduledAt} />
             </TableCell>
             <TableCell>
-              <Badge variant={statusVariant[c.status]}>{statusLabel[c.status]}</Badge>
+              <StatusBadge status={c.status} />
             </TableCell>
             {mode === "admin" && (
               <TableCell>
@@ -95,82 +79,5 @@ export function ConsultationsTable({
         ))}
       </TableBody>
     </Table>
-  );
-}
-
-// Filter and pagination are plain links, so list state lives in the URL.
-function listHref(basePath: string, params: { status?: ConsultationStatus; page?: number }) {
-  const search = new URLSearchParams();
-  if (params.status) search.set("status", params.status);
-  if (params.page && params.page > 1) search.set("page", String(params.page));
-  const qs = search.toString();
-  return qs ? `${basePath}?${qs}` : basePath;
-}
-
-const linkClass = (active: boolean) =>
-  cn(
-    "rounded-md px-3 py-1.5 text-sm",
-    active ? "bg-secondary font-medium" : "text-muted-foreground hover:text-foreground",
-  );
-
-export function StatusFilter({ basePath, status }: { basePath: string; status?: ConsultationStatus }) {
-  const options: { label: string; value?: ConsultationStatus }[] = [
-    { label: "All" },
-    ...consultationStatuses.map((value) => ({ label: statusLabel[value], value })),
-  ];
-  return (
-    <nav aria-label="Filter by status" className="flex flex-wrap gap-1">
-      {options.map(({ label, value }) => (
-        <Link
-          key={label}
-          href={listHref(basePath, { status: value })}
-          className={linkClass(status === value)}
-          aria-current={status === value ? "page" : undefined}
-        >
-          {label}
-        </Link>
-      ))}
-    </nav>
-  );
-}
-
-export function Pagination({
-  basePath,
-  result,
-  status,
-}: {
-  basePath: string;
-  result: Paginated<Consultation>;
-  status?: ConsultationStatus;
-}) {
-  const totalPages = Math.max(1, Math.ceil(result.total / result.pageSize));
-  return (
-    <nav aria-label="Pagination" className="flex items-center justify-between text-sm text-muted-foreground">
-      <span>
-        {result.total} total · page {result.page} of {totalPages}
-      </span>
-      <div className="flex gap-1">
-        {result.page > 1 && (
-          <Link href={listHref(basePath, { status, page: Math.min(result.page - 1, totalPages) })} className={linkClass(false)}>
-            Previous
-          </Link>
-        )}
-        {result.page < totalPages && (
-          <Link href={listHref(basePath, { status, page: result.page + 1 })} className={linkClass(false)}>
-            Next
-          </Link>
-        )}
-      </div>
-    </nav>
-  );
-}
-
-export function TableSkeleton() {
-  return (
-    <div className="grid gap-2" aria-busy="true" aria-label="Loading consultations">
-      {Array.from({ length: 5 }, (_, i) => (
-        <Skeleton key={i} className="h-10 w-full" />
-      ))}
-    </div>
   );
 }

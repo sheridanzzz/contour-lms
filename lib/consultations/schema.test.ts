@@ -77,3 +77,11 @@ describe("time slot helpers", () => {
     expect(result.getDate()).toBe(1);
   });
 });
+
+describe("scheduledAt messages", () => {
+  it("reports one clear message for an unparseable date, not two", () => {
+    const result = createConsultationSchema.safeParse({ ...valid(), scheduledAt: "next tuesday" });
+    const messages = result.error?.issues.filter((i) => i.path[0] === "scheduledAt").map((i) => i.message);
+    expect(messages).toEqual(["Choose a date and time"]);
+  });
+});

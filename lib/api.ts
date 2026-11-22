@@ -2,28 +2,33 @@ import "server-only";
 import { NextResponse, type NextRequest } from "next/server";
 import type { PostgrestError } from "@supabase/supabase-js";
 import { z } from "zod";
+import { GENERIC_ERROR_MESSAGE, type ApiErrorBody, type ApiErrorCode, type FieldErrors } from "@/lib/api-types";
 import { getCurrentUser, type CurrentUser } from "@/lib/auth";
 
-// Every API error has the same shape: { error: { code, message, fields? } }.
-export type ApiErrorCode =
-  | "validation_error"
-  | "unauthorized"
-  | "forbidden"
-  | "not_found"
-  | "conflict"
-  | "internal_error";
+// The API boundary: every route handler goes through these helpers, so errors
+// are mapped to the shared JSON shape here and nowhere else.
 
-export type ApiErrorBody = {
-  error: { code: ApiErrorCode; message: string; fields?: Record<string, string[]> };
-};
-
-export function apiError(
-  status: number,
-  code: ApiErrorCode,
-  message: string,
-  fields?: Record<string, string[]>,
-) {
+export function apiError(status: number, code: ApiErrorCode, message: string, fields?: FieldErrors) {
   return NextResponse.json<ApiErrorBody>({ error: { code, message, fields } }, { status });
+}
+
+/**
+ * Wraps a route handler so nothing escapes as Next's default HTML 500: expected
+ * failures are returned by the handler, anything unexpected (Supabase
+ * unreachable, a bug) is logged with context and answered in the shared shape.
+ */
+export function withErrorHandling<Args extends unknown[]>(
+  handler: (...args: Args) => Promise<Response>,
+) {
+  return async (...args: Args): Promise<Response> => {
+    try {
+      return await handler(...args);
+    } catch (error) {
+      const request = args[0] instanceof Request ? args[0] : undefined;
+      console.error("Unhandled API error", request?.method, request?.url, error);
+      return apiError(500, "internal_error", GENERIC_ERROR_MESSAGE);
+    }
+  };
 }
 
 export function validationError(error: z.ZodError) {
@@ -32,7 +37,7 @@ export function validationError(error: z.ZodError) {
     400,
     "validation_error",
     formErrors[0] ?? "Please fix the highlighted fields",
-    fieldErrors as Record<string, string[]>,
+    fieldErrors as FieldErrors,
   );
 }
 
@@ -48,17 +53,32 @@ export function dbError(error: PostgrestError) {
       return apiError(403, "forbidden", "You do not have permission to do that");
     default:
       console.error("Unexpected database error", error);
-      return apiError(500, "internal_error", "Something went wrong");
+      return apiError(500, "internal_error", GENERIC_ERROR_MESSAGE);
   }
 }
 
-export async function readJson(request: NextRequest): Promise<unknown> {
+/** The JSON body, or undefined when it isn't valid JSON (schema validation then answers 400). */
+async function readJson(request: NextRequest): Promise<unknown> {
   try {
     return await request.json();
   } catch {
-    return undefined; // fails schema validation -> 400
+    return undefined;
   }
 }
+
+type Parsed<T> = { data: T; response?: never } | { data?: never; response: NextResponse };
+
+/** Validates any input against a schema: the parsed data, or a ready-made 400 response. */
+export function parse<S extends z.ZodType>(schema: S, input: unknown): Parsed<z.output<S>> {
+  const result = schema.safeParse(input);
+  return result.success ? { data: result.data } : { response: validationError(result.error) };
+}
+
+export const parseBody = async <S extends z.ZodType>(request: NextRequest, schema: S) =>
+  parse(schema, await readJson(request));
+
+export const parseQuery = <S extends z.ZodType>(request: NextRequest, schema: S) =>
+  parse(schema, Object.fromEntries(request.nextUrl.searchParams));
 
 type Guard = { user: CurrentUser; response?: never } | { user?: never; response: NextResponse };
 
@@ -83,7 +103,9 @@ export async function requireStudent(): Promise<Guard> {
   const guard = await requireUser();
   if (guard.response) return guard;
   if (guard.user.isAdmin) {
-    return { response: apiError(403, "forbidden", "Admins can view consultations but not book or change them") };
+    return {
+      response: apiError(403, "forbidden", "Admins can view consultations but not book or change them"),
+    };
   }
   return guard;
 }

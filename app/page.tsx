@@ -1,6 +1,5 @@
-import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { getCurrentUser } from "@/lib/auth";
+import { RoleRedirect } from "@/components/role-redirect";
 
 // Entry point: send each user to the view for their role.
 export default function Home() {
@@ -9,11 +8,4 @@ export default function Home() {
       <RoleRedirect />
     </Suspense>
   );
-}
-
-async function RoleRedirect() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/auth/login");
-  redirect(user.isAdmin ? "/admin" : "/dashboard");
-  return null;
 }

@@ -31,3 +31,21 @@ export function timeSlots(day: Date, now: Date): string[] {
   }
   return slots;
 }
+
+// Display formats, in the viewer's locale and timezone (browser only: the server
+// doesn't know the viewer's timezone, see LocalDateTime).
+const dateTimeFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
+const dayFormat = new Intl.DateTimeFormat(undefined, {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+});
+const timeFormat = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
+
+/** "21 Nov 2026, 6:00 pm" */
+export const formatDateTime = (date: Date) => dateTimeFormat.format(date);
+/** "Sat, 21 Nov 2026" */
+export const formatDay = (date: Date) => dayFormat.format(date);
+/** "6:00 pm" */
+export const formatTime = (date: Date) => timeFormat.format(date);

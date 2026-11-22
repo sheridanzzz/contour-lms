@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { PASSWORD_HINT, PASSWORD_MIN_LENGTH } from "@/lib/password-policy";
 
 export function UpdatePasswordForm({
   className,
@@ -63,11 +64,16 @@ export function UpdatePasswordForm({
                   type="password"
                   placeholder="New password"
                   required
+                  minLength={PASSWORD_MIN_LENGTH}
+                  aria-describedby="password-hint"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
+                <p id="password-hint" className="text-xs text-muted-foreground">
+                  {PASSWORD_HINT}
+                </p>
               </div>
-              {error && <p className="text-sm text-red-500">{error}</p>}
+              {error && <p className="text-sm text-destructive">{error}</p>}
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? "Saving..." : "Save new password"}
               </Button>

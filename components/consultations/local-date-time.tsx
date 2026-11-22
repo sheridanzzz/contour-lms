@@ -1,8 +1,8 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { formatDateTime } from "@/lib/consultations/datetime";
 
-const formatter = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
 const noopSubscribe = () => () => {};
 
 /**
@@ -12,7 +12,7 @@ const noopSubscribe = () => () => {};
 export function LocalDateTime({ iso }: { iso: string }) {
   const text = useSyncExternalStore(
     noopSubscribe,
-    () => formatter.format(new Date(iso)),
+    () => formatDateTime(new Date(iso)),
     () => null,
   );
   return (

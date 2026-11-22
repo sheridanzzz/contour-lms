@@ -13,17 +13,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { combineDateAndTime, timeSlots, toTimeValue } from "@/lib/consultations/datetime";
+import {
+  combineDateAndTime,
+  formatDay,
+  formatTime,
+  timeSlots,
+  toTimeValue,
+} from "@/lib/consultations/datetime";
 import { cn } from "@/lib/utils";
 import { errorProps } from "./form-field";
-
-const dateLabel = new Intl.DateTimeFormat(undefined, {
-  weekday: "short",
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-});
-const timeLabel = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
 
 /**
  * Calendar + time slot picker. The combined value is submitted as an ISO 8601
@@ -65,7 +63,7 @@ export function DateTimePicker({
             {...errorProps(id, error)}
           >
             <CalendarIcon />
-            {day ? dateLabel.format(day) : "Pick a date"}
+            {day ? formatDay(day) : "Pick a date"}
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-2" align="start">
@@ -91,7 +89,7 @@ export function DateTimePicker({
           {day &&
             slots.map((slot) => (
               <SelectItem key={slot} value={slot}>
-                {timeLabel.format(combineDateAndTime(day, slot))}
+                {formatTime(combineDateAndTime(day, slot))}
               </SelectItem>
             ))}
         </SelectContent>
