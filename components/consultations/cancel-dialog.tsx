@@ -21,8 +21,8 @@ export function CancelDialog({ consultation }: { consultation: Consultation }) {
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button size="sm" variant="ghost" className="text-destructive">
-          Cancel
+        <Button size="sm" variant="ghost" className="text-destructive" disabled={busy}>
+          {busy ? "Cancelling…" : "Cancel"}
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
@@ -34,10 +34,7 @@ export function CancelDialog({ consultation }: { consultation: Consultation }) {
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Keep it</AlertDialogCancel>
-          <AlertDialogAction
-            disabled={busy}
-            onClick={() => update({ status: "cancelled" }, "Consultation cancelled")}
-          >
+          <AlertDialogAction onClick={() => update({ status: "cancelled" }, "Consultation cancelled")}>
             Cancel consultation
           </AlertDialogAction>
         </AlertDialogFooter>

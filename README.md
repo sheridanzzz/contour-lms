@@ -47,7 +47,7 @@ Passwords: at least 8 characters with upper and lower case letters and a number 
 |---|---|
 | `npm run dev` / `build` / `start` | Next.js |
 | `npm run lint` | ESLint (next/core-web-vitals + typescript) |
-| `npm test` | Unit tests (Vitest): validation schemas and datetime helpers |
+| `npm test` | Unit tests (Vitest): schemas, status rules, service, API boundary, browser client, redirect guard |
 | `npm run test:db` | Database tests (pgTAP): RLS, roles, privileges, status rules |
 | `npm run test:api` | API integration tests (Vitest): real HTTP against the running app (`npm run dev`) and local Supabase |
 | `npm run db:start` / `db:reset` | Start the local stack / rebuild the DB from migrations + seed |
@@ -69,7 +69,7 @@ Browser ──fetch──▶ /api/* Route Handlers ──▶ lib/consultations/s
 - **One service module** (`lib/consultations/service.ts`) holds every query. Route handlers stay thin: authenticate, validate, call the service, map errors.
 - **One zod schema per payload** (`lib/consultations/schema.ts`), shared by the booking form (instant feedback) and the API (authoritative check).
 - **Every query runs as the signed-in user** through the cookie-based `@supabase/ssr` client, so RLS applies everywhere. The service role key is never used by the app.
-- Pages use Next 16 Cache Components: a static shell is prerendered and the user's data streams in behind a skeleton.
+- Pages use Next 16 Cache Components: the prerendered static shell is only the layout and a skeleton. Everything role-specific (page headings, the Book button) renders behind `RoleGate` after the role check, so a student never sees the admin page and an admin never sees the Book button. The data then streams in behind a table skeleton.
 
 ### Features
 | Requirement | Where |
@@ -144,7 +144,7 @@ All of the above is proven by `supabase/tests/database/security.test.sql` (26 pg
 - **Admins oversee; they don't book, edit or delete.** The brief asks for an admin list of all consultations and says read-only is fine, and never has admins booking. So admins land on `/admin`, `/dashboard` redirects them there, the booking API returns 403 for them, and RLS blocks admin writes. Nobody hard-deletes; cancelling is a status. Admin actions (e.g. cancel on a student's behalf) would be a small addition: an admin update policy plus a route.
 - **Times** are stored as `timestamptz` (UTC) and displayed in the viewer's browser timezone. The booking form offers a calendar plus 30-minute time slots between 7am and 9pm (a UI convenience; the API accepts any future time).
 - **Lists are sorted by scheduled time, soonest first**, 20 per page.
-- Email confirmation is off locally (Supabase CLI default). In production it should be on, with the confirmation email template pointed at the template's `/auth/confirm` route (token hash flow).
+- Email confirmation is off locally (Supabase CLI default). In production it should be on, with the confirmation email template pointed at the template's `/auth/confirm` route (token hash flow). That route only redirects to same-origin paths (`lib/safe-next-path.ts`), so its `?next=` cannot be used as an open redirect.
 
 ---
 
@@ -196,9 +196,9 @@ How the usual principles show up here, and where I deliberately stopped.
 |---|---|---|
 | Database (pgTAP) | `npm run test:db` | RLS enabled; anon has no access; students see only their own rows and profile; cannot change roles, set owner/status on insert, delete, or touch others' rows; future-only bookings; blank fields rejected; every status transition; admin reads all but cannot write |
 | API integration (Vitest) | `npm run test:api` | 38 tests over real HTTP with real sessions: 401 on every route; booking (201, field errors, past/blank/long/non-ISO, client-set owner or status, bad JSON); own-rows-only listing, envelope, filters, page past the end, bad query params; complete/reopen/reschedule/cancel, every 409 transition, bad bodies, malformed id, 404 for other students and unknown ids; admin 403 on student routes and student 403 on the admin route; admin sees every student, filter + pagination |
-| Unit (Vitest) | `npm test` | 32 tests: schemas (future dates, lengths, strict keys, one-change rule, page size cap, one message per bad date); status rules matrix (same as the DB); time slot helpers; service with a fake injected client (filters, paging, camelCase mapping, page-past-the-end fallback, only booking fields sent, owner-scoped update); API boundary (`withErrorHandling`, `dbError`, field errors); browser client (`callApi` success, API error, non-JSON reply, network failure) |
-| Manual | browser | Signed-out redirects; wrong password; sign-up (mismatch, short password, success as Student); booking validation (blank, whitespace, no date); picker (past days and slots hidden, local time sent as UTC); complete/incomplete persists; reschedule pre-fills and re-sorts; cancel confirm and "Keep it"; status filters and bad query params; page past the end; stale row changed elsewhere (409 toast, list refreshes); student 404 on `/admin`; admin list, filter, read-only; logout clears client state; phone width |
-| Security probes | curl + browser | Direct Data API calls with student/admin/no token; cross-site POST and PATCH from another origin (blocked: `SameSite=Lax` cookie, CORS preflight); HTML/script in names and reason renders as text; no secret or service role key in the client bundle; `npm audit` clean |
+| Unit (Vitest) | `npm test` | 42 tests: schemas (future dates, lengths, strict keys, one-change rule, page size cap, one message per bad date); status rules matrix (same as the DB); time slot helpers; service with a fake injected client (filters, paging, camelCase mapping, page-past-the-end fallback, only booking fields sent, owner-scoped update); API boundary (`withErrorHandling`, `dbError`, field errors); browser client (`callApi` success, API error, non-JSON reply including a 2xx, network failure); `?next=` redirect guard (same-origin paths kept; `https://`, `//`, `/\`, tab and `javascript:` tricks fall back to `/`) |
+| Manual | browser | Signed-out redirects; wrong password; sign-up (mismatch, short password, success as Student); booking validation (blank, whitespace, no date); picker (past days and slots hidden, local time sent as UTC); complete/incomplete persists; reschedule pre-fills and re-sorts; cancel confirm and "Keep it"; status filters and bad query params; page past the end; stale row changed elsewhere (409 toast, list refreshes); empty states (no bookings, empty filter, page past the end); cancel button disabled while saving; student 404 on `/admin`; admin list, filter, read-only; logout clears client state; phone width |
+| Security probes | curl + browser | Direct Data API calls with student/admin/no token; cross-site POST and PATCH from another origin (blocked: `SameSite=Lax` cookie, CORS preflight); HTML/script in names and reason renders as text; `/auth/confirm?next=https://evil.com` with a valid token lands on `/`, not off-site; no secret or service role key in the client bundle; `npm audit` clean |
 
 ---
 

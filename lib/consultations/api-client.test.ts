@@ -30,6 +30,14 @@ describe("callApi", () => {
     expect(error?.message).toMatch(/something went wrong/i);
   });
 
+  it("treats a 2xx reply that isn't JSON as an error, not as empty data", async () => {
+    vi.stubGlobal("fetch", reply(200, "<html>Sign in to Wi-Fi</html>"));
+    const { data, error } = await callApi("/api/x", "POST", {});
+    expect(data).toBeNull();
+    expect(error).toMatchObject({ status: 200 });
+    expect(error?.message).toMatch(/something went wrong/i);
+  });
+
   it("turns a network failure into an ApiError instead of throwing", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
     const { error } = await callApi("/api/x", "POST", {});

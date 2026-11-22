@@ -34,7 +34,7 @@ export async function callApi<T>(
   }
 
   const json: unknown = await res.json().catch(() => null);
-  if (!res.ok) {
+  if (!res.ok || json === null) {
     const error = (json as ApiErrorBody | null)?.error;
     return {
       data: null,

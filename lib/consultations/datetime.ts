@@ -1,7 +1,7 @@
 // Booking times: a calendar day plus a time slot, in the browser's timezone.
 // The API always receives an ISO 8601 UTC string.
 
-// ponytail: fixed UI slots (every 30 min, 7am to 9pm). The API accepts any
+// Trade-off: fixed UI slots (every 30 min, 7am to 9pm). The API accepts any
 // future time; move these to config or a tutor availability table if needed.
 export const SLOT_MINUTES = 30;
 const FIRST_SLOT = 7 * 60;

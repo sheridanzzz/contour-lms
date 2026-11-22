@@ -46,7 +46,7 @@ export async function listConsultations(
   if (studentId) filters.student_id = studentId;
   if (status) filters.status = status;
 
-  // ponytail: offset pagination with an exact count; switch to keyset
+  // Trade-off: offset pagination with an exact count; switch to keyset
   // pagination on (scheduled_at, id) if the table grows to millions of rows.
   const { data, error, count } = await supabase
     .from("consultations")

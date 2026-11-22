@@ -1,5 +1,6 @@
 import { requirePageRole } from "@/lib/auth";
 import { listConsultationsQuerySchema } from "@/lib/consultations/schema";
+import type { ListConsultationsQuery } from "@/lib/consultations/types";
 import { listConsultations } from "@/lib/consultations/service";
 import { ConsultationsTable } from "./consultations-table";
 import { Pagination } from "./pagination";
@@ -40,8 +41,17 @@ export async function ConsultationList({
   return (
     <div className="flex flex-col gap-4">
       <StatusFilter basePath={basePath} status={query.status} />
-      <ConsultationsTable consultations={data.data} mode={mode} />
+      <ConsultationsTable consultations={data.data} mode={mode} emptyMessage={emptyMessage(mode, query)} />
       <Pagination basePath={basePath} result={data} status={query.status} />
     </div>
   );
+}
+
+/** What an empty list means depends on why it is empty. */
+function emptyMessage(mode: "student" | "admin", { status, page }: ListConsultationsQuery): string {
+  if (page > 1) return "No consultations on this page.";
+  if (status) return "No consultations match this filter.";
+  return mode === "student"
+    ? "No consultations here yet. Use “Book consultation” to create one."
+    : "No consultations have been booked yet.";
 }

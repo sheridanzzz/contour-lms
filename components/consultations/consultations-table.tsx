@@ -18,16 +18,16 @@ import { StatusBadge } from "./status-badge";
 export function ConsultationsTable({
   consultations,
   mode,
+  emptyMessage,
 }: {
   consultations: Consultation[];
   mode: "student" | "admin";
+  emptyMessage: string;
 }) {
   if (consultations.length === 0) {
     return (
       <p className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
-        {mode === "student"
-          ? "No consultations here yet. Use “Book consultation” to create one."
-          : "No consultations match this filter."}
+        {emptyMessage}
       </p>
     );
   }
