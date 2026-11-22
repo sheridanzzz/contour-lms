@@ -66,7 +66,7 @@ Browser ──fetch──▶ /api/* Route Handlers ──▶ lib/consultations/s
 ```
 
 - **Writes go through API routes** (`app/api/**/route.ts`), as requested ("APIs over Server Actions"). Client components call them with `fetch`, then `router.refresh()` re-renders the server list.
-- **Reads happen in Server Components** that call the same service module directly, so pages do not make an HTTP round trip to their own server. The template's auth flows (login, sign-up, password reset) are unchanged apart from redirects.
+- **Reads happen in Server Components** that call the same service module directly, so pages do not make an HTTP round trip to their own server. The template's auth flows (login, sign-up, password reset) are kept, with three changes: role-aware redirects, password-policy hints on the sign-up and update-password forms, and `/auth/confirm` limited to same-origin redirects (the template redirected to any `?next=` URL).
 - **One service module** (`lib/consultations/service.ts`) holds every query. Route handlers stay thin: authenticate, validate, call the service, map errors.
 - **One zod schema per payload** (`lib/consultations/schema.ts`), shared by the booking form (instant feedback) and the API (authoritative check).
 - **Every query runs as the signed-in user** through the cookie-based `@supabase/ssr` client, so RLS applies everywhere. The service role key is never used by the app.
@@ -76,7 +76,7 @@ Browser ──fetch──▶ /api/* Route Handlers ──▶ lib/consultations/s
 | Requirement | Where |
 |---|---|
 | Sign up / log in / log out | Template auth pages (`app/auth/*`), role-aware redirect in `app/page.tsx` |
-| Student dashboard (own consultations only) | `app/(app)/dashboard`, `GET /api/consultations` |
+| Student dashboard (own consultations only) | `app/(app)/dashboard` (reads through the service); the same list as an API: `GET /api/consultations` |
 | Mark complete / incomplete | Checkbox per row, `PATCH /api/consultations/:id { status }` |
 | Booking form (first name, last name, reason, datetime) | `BookConsultationDialog`, `POST /api/consultations` |
 | Reschedule / cancel own consultations | Row actions, `PATCH /api/consultations/:id { scheduledAt }` / `{ status: "cancelled" }` |
@@ -212,6 +212,9 @@ How the usual principles show up here, and where I deliberately stopped.
 - Rate limiting on the API and turning on email confirmation, leaked-password protection and MFA for admins in the hosted project.
 - `getClaims()` verifies the JWT locally (fast, no Auth round trip), so a deleted or banned user keeps a valid session until the token expires (1 hour by default). RLS still limits them to their own rows. For stricter revocation, call `getUser()` on mutations or shorten the JWT expiry.
 - CI pipeline running lint, type check, unit, pgTAP and API tests (against a fresh `supabase start`) on every push.
+- A real 404 status for students on `/admin`. Today they get the 404 page and nothing admin-specific is sent, but the HTTP status is 200: the role check runs inside the streamed page, after the response has started. Checking the role in `proxy.ts` (with the role copied into the JWT) would answer 404 before streaming.
+- Indexes for status filters, e.g. `(student_id, status, scheduled_at)` or a partial index per status, if filtered lists (especially the admin's, for a rare status) become common.
+- Trim names and reason in the trigger too. The API trims them with zod, but a student writing straight to the Data API can store surrounding spaces (the check constraints only reject blank values).
 
 ---
 
@@ -228,12 +231,16 @@ app/
 components/
   consultations/                one component per file: list, table, status badge/filter,
                                 pagination, booking/reschedule/cancel dialogs, complete toggle,
-                                date-time picker, form field, skeleton
-  user-nav.tsx, role-redirect.tsx, logout-button.tsx, auth forms (template)
+                                date-time picker, form field, page and table skeletons
+  role-gate.tsx                 renders page content only for the right role (inside Suspense)
+  role-redirect.tsx             sends / to the home view for the user's role
+  user-nav.tsx, logout-button.tsx, auth-error-message.tsx, auth forms (template)
 lib/
   api.ts                        API boundary: guards, withErrorHandling, error mapping
   api-types.ts                  HTTP error contract shared by server and client
   auth.ts                       getCurrentUser (claims + is_admin), requirePageRole
+  password-policy.ts            password rule and hint shown on the auth forms
+  safe-next-path.ts             same-origin guard for the /auth/confirm redirect
   consultations/schema.ts       zod request schemas
   consultations/types.ts        shared domain types
   consultations/service.ts      all consultation queries (server)
