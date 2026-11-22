@@ -5,6 +5,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:db": "supabase test db",
     "db:start": "supabase start",

@@ -48,3 +48,7 @@ supabase/.temp
 # local notes and editor tooling
 PLAN.md
 .claude/
+
+# editors
+.idea/
+.vscode/

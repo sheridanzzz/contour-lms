@@ -47,9 +47,10 @@ Passwords: at least 8 characters with upper and lower case letters and a number 
 |---|---|
 | `npm run dev` / `build` / `start` | Next.js |
 | `npm run lint` | ESLint (next/core-web-vitals + typescript) |
+| `npm run typecheck` | TypeScript check. Runs `next typegen` first, because Next generates the global `PageProps`/`RouteContext` types (a bare `tsc` on a fresh clone fails until `dev` or `build` has run) |
 | `npm test` | Unit tests (Vitest): schemas, status rules, service, API boundary, browser client, redirect guard |
 | `npm run test:db` | Database tests (pgTAP): RLS, roles, privileges, status rules |
-| `npm run test:api` | API integration tests (Vitest): real HTTP against the running app (`npm run dev`) and local Supabase |
+| `npm run test:api` | API integration tests (Vitest): real HTTP against the running app (`npm run dev`) and local Supabase. Test rows stay in the database; `npm run db:reset` clears them |
 | `npm run db:start` / `db:reset` | Start the local stack / rebuild the DB from migrations + seed |
 | `npm run db:types` | Regenerate `lib/supabase/database.types.ts` from the schema |
 
